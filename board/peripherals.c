@@ -209,6 +209,45 @@ static void PIT_init(void) {
 }
 
 /***********************************************************************************************************************
+ * DAC0 initialization code
+ **********************************************************************************************************************/
+/* clang-format off */
+/* TEXT BELOW IS USED AS SETTING FOR TOOLS *************************************
+instance:
+- name: 'DAC0'
+- type: 'dac'
+- mode: 'basic'
+- custom_name_enabled: 'false'
+- type_id: 'dac_a54f338a6fa6fd273bc89d61f5a3b85e'
+- functional_group: 'BOARD_InitPeripherals'
+- peripheral: 'DAC0'
+- config_sets:
+  - fsl_dac:
+    - dac_config:
+      - referenceVoltageSource: 'kDAC_ReferenceVoltageSourceVref2'
+      - enableLowPowerMode: 'false'
+    - dac_enable: 'true'
+    - dac_value: '0'
+    - quick_selection: 'QS_DAC_1'
+ * BE CAREFUL MODIFYING THIS COMMENT - IT IS YAML SETTINGS FOR TOOLS **********/
+/* clang-format on */
+const dac_config_t DAC0_config = {
+  .referenceVoltageSource = kDAC_ReferenceVoltageSourceVref2,
+  .enableLowPowerMode = false
+};
+
+static void DAC0_init(void) {
+  /* Initialize DAC converter */
+  DAC_Init(DAC0_PERIPHERAL, &DAC0_config);
+  /* Output value of DAC. */
+  DAC_SetBufferValue(DAC0_PERIPHERAL, 0U, 0U);
+  /* Make sure the read pointer is set to the start */
+  DAC_SetBufferReadPointer(DAC0_PERIPHERAL, 0U);
+  /* Enable DAC output */
+  DAC_Enable(DAC0_PERIPHERAL, true);
+}
+
+/***********************************************************************************************************************
  * Initialization functions
  **********************************************************************************************************************/
 void BOARD_InitPeripherals(void)
@@ -216,6 +255,7 @@ void BOARD_InitPeripherals(void)
   /* Initialize components */
   ADC0_init();
   PIT_init();
+  DAC0_init();
 }
 
 /***********************************************************************************************************************

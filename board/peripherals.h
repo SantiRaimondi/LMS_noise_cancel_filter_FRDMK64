@@ -12,6 +12,7 @@
 #include "fsl_common.h"
 #include "fsl_adc16.h"
 #include "fsl_pit.h"
+#include "fsl_dac.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -50,6 +51,8 @@ extern "C" {
 #define PIT_CHANNEL_0_IRQN PIT0_IRQn
 /* PIT interrupt handler identifier. */
 #define PIT_CHANNEL_0_IRQHANDLER PIT0_IRQHandler
+/* Alias for DAC0 peripheral */
+#define DAC0_PERIPHERAL DAC0
 
 /***********************************************************************************************************************
  * Global variables
@@ -58,6 +61,7 @@ extern adc16_channel_config_t ADC0_channelsConfig[1];
 extern const adc16_config_t ADC0_config;
 extern const adc16_channel_mux_mode_t ADC0_muxMode;
 extern const pit_config_t PIT_config;
+extern const dac_config_t DAC0_config;
 
 /***********************************************************************************************************************
  * Initialization functions
