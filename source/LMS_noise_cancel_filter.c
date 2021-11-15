@@ -36,7 +36,6 @@
 #define BLOCKSIZE 	(uint32_t)	1		/* Cantidad de muestras a procesar por llamado de los filtros */
 #define POSTSHIFT 	(uint32_t)	0
 //#define MU			(q15_t)		1000	/* Paso de aproximacion del filtro LMS */
-#define NUMFRAMES	(uint32_t)	1000	/* Cantidad de veces que se computa el calculo del LMS */
 #define CHANNEL_GROUP (uint32_t) 0		/* Para el ADC */
 #define DAC_BUFFER_INDEX 		0U		/* Como no se utiliza el buffer, siempre es 0 este valor */
 #define DC_OFFSET 				32767U	/* Offset de continua (1,65 [V]) */
@@ -59,6 +58,9 @@ volatile bool adc_finished = false;		/* Flag que indica si hay una nueva muestra
 /* Valor con el que se shiftea la señal de ruido.
  * La amplitud del ruido no tiene que ser excesiva respecto a la señal.
  * Con 17 para arriba anda bien (tomamos los 15 MSB que devuelve rand()).
+ *
+ * Se declaran globales para poder modificarlas durante debugg sin necesidad
+ * de compilar el programa nuevamente.
  */
 uint8_t noise_shift = 18;
 q15_t MU = 1000;
@@ -120,41 +122,33 @@ int main(void) {
 
 	/* Filtro FIR (planta) */
 	arm_fir_instance_q15 fir_struct;
-	q15_t fir_coeficients[NUMTAPS] = {5,		10,		20,		40,		80,	  160,	320,	640,	1320,	2640,
-									5280, 10560,	21120, 21120, 21120, 21120, 21120, 21120, 10560, 	5280,
-									2640, 	1320, 	640,	320, 	160, 	80, 	40, 	20, 	10, 	5};
+	q15_t fir_coeficients[NUMTAPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,32767,32767,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	q15_t fir_state[NUMTAPS + BLOCKSIZE - 1];
 	arm_fir_init_q15(&fir_struct, NUMTAPS, fir_coeficients, fir_state, BLOCKSIZE);
 
 	/* Filtro LMS */
-	arm_lms_instance_q15 lms_struct;
+	arm_lms_norm_instance_q15 lms_struct;
 	q15_t lms_coeficients[NUMTAPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	q15_t lms_state[NUMTAPS + BLOCKSIZE - 1];
-	arm_lms_init_q15(&lms_struct, NUMTAPS, lms_coeficients, lms_state, MU, BLOCKSIZE, POSTSHIFT);
-
+	arm_lms_norm_init_q15(&lms_struct, NUMTAPS, lms_coeficients, lms_state, MU, BLOCKSIZE, POSTSHIFT);
 
 	/* Buffers auxiliares para computar algoritmo LMS */
 	q15_t src[BLOCKSIZE];	/* Entrada del FIR (ruido) */
-	q15_t fir_output[BLOCKSIZE]; /* Señal con la que se entrena al algoritmo LMS (correlacion de ruido) */
+	q15_t fir_output[BLOCKSIZE]; /* Señal con la que se entrena al algoritmo LMS (ruido) */
 	q15_t ref[BLOCKSIZE];	/* Señal de referencia (señal+ruido)*/
 	q15_t out[BLOCKSIZE];	/* Salida del procesador adaptativo (filtro LMS) */
 	q15_t err[BLOCKSIZE];	/* Error (ref-out) que se realimenta al procesador adaptivo */
 
 	/* Variables auxiliares */
-	uint8_t sample_counter = 0;	/* Cuenta cantidad de muestras tomadas */
-	bool samples_ready = false;	/* Indica si se lleno el buffer */
-	q15_t* ref_ptr = ref;
-	q15_t* src_ptr = src;
-	q15_t* err_ptr = err;
+//	static float32_t ref_value, err_value;
 
 
     while(1) {
 
     	/* Primero se toman las 100 muestras */
-    	if(adc_finished && sample_counter < BLOCKSIZE)
+    	if(adc_finished)
     	{
     		adc_finished = false;
-    		sample_counter ++;
 
 			/* Se construye la señal con ruido. Se shiftea el valor devuelto
 			 * para que sea una señal pequeña y no sature el calculo del filtro.
@@ -172,38 +166,20 @@ int main(void) {
 				input_value_fixed = (q15_t)(sin_value * 16384); // 16384 = 2^14
 			#endif
 
-			*ref_ptr = (q15_t)((rand()>>noise_shift) + input_value_fixed);
-			*src_ptr = (q15_t)((rand()>>noise_shift));
+			ref[0] = (q15_t)((rand()>>noise_shift) + input_value_fixed);
+			src[0] = (q15_t)((rand()>>noise_shift) );
 
-//			DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*ref_ptr>>4)); /* Señal de referencia del filtro */
-	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, ((*err_ptr>>5)  + DC_OFFSET)); /* Señal filtrada */
-
-			/* Incremento el puntero de manera circular */
-			if(sample_counter >= BLOCKSIZE)
-			{
-				ref_ptr = ref;
-				src_ptr = src;
-				err_ptr = err;
-				sample_counter = 0;
-				samples_ready = true;
-			}
-			else
-			{
-				ref_ptr ++;
-				src_ptr ++;
-				err_ptr ++;
-			}
-    	}
-
-    	/* Hasta que no se toman las 100 muestras no se ejecuta el filtro LMS */
-		if(samples_ready)
-		{
-			samples_ready = false;
+			// DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (ref[0]>>4)); /* Señal de referencia del filtro */
+	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, ((err[0]>>4) + DC_OFFSET)); /* Señal filtrada */
 
 			arm_fir_q15(&fir_struct, src, fir_output, BLOCKSIZE);
-			arm_lms_q15(&lms_struct, fir_output, ref, out, err, BLOCKSIZE);
+			arm_lms_norm_q15(&lms_struct, fir_output, ref, out, err, BLOCKSIZE);
 
-		}
+			/* Para usar osciloscopio serial */
+			// arm_q15_to_float(ref, &ref_value, BLOCKSIZE);
+//			 arm_q15_to_float(err, &err_value, BLOCKSIZE);
+//			PRINTF("%d, %d\r", ref[0], out[0]);
+    	}
     }
 
     return 0 ;
