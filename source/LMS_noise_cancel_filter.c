@@ -143,6 +143,7 @@ int main(void) {
 	/* Variables auxiliares */
 	uint8_t sample_counter = 0;
 	q15_t* ref_ptr = ref;
+	q15_t* src_ptr = src;
 	q15_t* out_ptr = out;
 	bool samples_ready = false;	/* Indica si se lleno el buffer */
 
@@ -172,21 +173,24 @@ int main(void) {
 			#endif
 
 			*ref_ptr = (q15_t)((rand()>>noise_shift) + input_value_fixed + DC_OFFSET);
+			*src_ptr = (q15_t)((rand()>>noise_shift));
 
-			DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*ref_ptr>>4)); /* Señal de referencia del filtro */
-//	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*out_ptr>>4)); /* Señal filtrada */
+			// DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*ref_ptr>>4)); /* Señal de referencia del filtro */
+	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*out_ptr>>4)); /* Señal filtrada */
 
 			/* Incremento el puntero de manera circular */
 			if(sample_counter >= BLOCKSIZE)
 			{
 				ref_ptr = ref;
 				out_ptr = out;
+				src_ptr = src;
 				sample_counter = 0;
 				samples_ready = true;
 			}
 			else
 			{
 				ref_ptr ++;
+				src_ptr ++;
 				out_ptr ++;
 			}
     	}
