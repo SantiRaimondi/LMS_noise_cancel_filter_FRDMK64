@@ -135,17 +135,17 @@ int main(void) {
 
 	/* Buffers auxiliares para computar algoritmo LMS */
 	q15_t src[BLOCKSIZE];	/* Entrada del FIR (ruido) */
-	q15_t fir_output[BLOCKSIZE]; /* Señal con la que se entrena al algoritmo LMS (ruido) */
+	q15_t fir_output[BLOCKSIZE]; /* Señal con la que se entrena al algoritmo LMS (correlacion de ruido) */
 	q15_t ref[BLOCKSIZE];	/* Señal de referencia (señal+ruido)*/
 	q15_t out[BLOCKSIZE];	/* Salida del procesador adaptativo (filtro LMS) */
 	q15_t err[BLOCKSIZE];	/* Error (ref-out) que se realimenta al procesador adaptivo */
 
 	/* Variables auxiliares */
-	uint8_t sample_counter = 0;
+	uint8_t sample_counter = 0;	/* Cuenta cantidad de muestras tomadas */
+	bool samples_ready = false;	/* Indica si se lleno el buffer */
 	q15_t* ref_ptr = ref;
 	q15_t* src_ptr = src;
-	q15_t* out_ptr = out;
-	bool samples_ready = false;	/* Indica si se lleno el buffer */
+	q15_t* err_ptr = err;
 
 
     while(1) {
@@ -172,18 +172,18 @@ int main(void) {
 				input_value_fixed = (q15_t)(sin_value * 16384); // 16384 = 2^14
 			#endif
 
-			*ref_ptr = (q15_t)((rand()>>noise_shift) + input_value_fixed + DC_OFFSET);
+			*ref_ptr = (q15_t)((rand()>>noise_shift) + input_value_fixed);
 			*src_ptr = (q15_t)((rand()>>noise_shift));
 
-			// DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*ref_ptr>>4)); /* Señal de referencia del filtro */
-	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*out_ptr>>4)); /* Señal filtrada */
+//			DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, (*ref_ptr>>4)); /* Señal de referencia del filtro */
+	    	DAC_SetBufferValue(DAC0, DAC_BUFFER_INDEX, ((*err_ptr>>5)  + DC_OFFSET)); /* Señal filtrada */
 
 			/* Incremento el puntero de manera circular */
 			if(sample_counter >= BLOCKSIZE)
 			{
 				ref_ptr = ref;
-				out_ptr = out;
 				src_ptr = src;
+				err_ptr = err;
 				sample_counter = 0;
 				samples_ready = true;
 			}
@@ -191,21 +191,19 @@ int main(void) {
 			{
 				ref_ptr ++;
 				src_ptr ++;
-				out_ptr ++;
+				err_ptr ++;
 			}
     	}
 
     	/* Hasta que no se toman las 100 muestras no se ejecuta el filtro LMS */
-    	if(samples_ready)
-    	{
-    		samples_ready = false;
+		if(samples_ready)
+		{
+			samples_ready = false;
 
-    		for(uint16_t i = 0; i < NUMFRAMES; i++)
-    		{
-    			arm_fir_q15(&fir_struct, src, fir_output, BLOCKSIZE);
-    			arm_lms_q15(&lms_struct, fir_output, ref, out, err, BLOCKSIZE);
-    		}
-    	}
+			arm_fir_q15(&fir_struct, src, fir_output, BLOCKSIZE);
+			arm_lms_q15(&lms_struct, fir_output, ref, out, err, BLOCKSIZE);
+
+		}
     }
 
     return 0 ;
