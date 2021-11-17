@@ -57,7 +57,8 @@ volatile bool adc_finished = false;		/* Flag que indica si hay una nueva muestra
 
 /* Valor con el que se shiftea la señal de ruido.
  * La amplitud del ruido no tiene que ser excesiva respecto a la señal.
- * Con 17 para arriba anda bien (tomamos los 15 MSB que devuelve rand()).
+ * Con 17 para arriba anda bien (si noise_shift = 17 se tomanlos 15
+ * MSB que devuelve rand()).
  *
  * Se declaran globales para poder modificarlas durante debugg sin necesidad
  * de compilar el programa nuevamente.
@@ -85,25 +86,25 @@ void PIT_CHANNEL_0_IRQHANDLER(void) {
 
 /* ADC0_IRQn interrupt handler */
 void ADC0_IRQHANDLER(void) {
-  /* Array of result values*/
-  uint32_t result_values[2] = {0};
-  /* Get flags for each group */
-  for ( int i=0; i<2; i++){
-  uint32_t status = ADC16_GetChannelStatusFlags(ADC0_PERIPHERAL, i);
-  	if ( status == kADC16_ChannelConversionDoneFlag){
-  		result_values[i] = ADC16_GetChannelConversionValue(ADC0_PERIPHERAL, i);
-  	}
-  }
+	/* Array of result values*/
+	uint32_t result_values[2] = {0};
+	/* Get flags for each group */
+	for ( int i=0; i<2; i++){
+	uint32_t status = ADC16_GetChannelStatusFlags(ADC0_PERIPHERAL, i);
+	if ( status == kADC16_ChannelConversionDoneFlag){
+		result_values[i] = ADC16_GetChannelConversionValue(ADC0_PERIPHERAL, i);
+	}
+	}
 
-  /* Place your code here */
-  adc_finished = true;
-  input_value_fixed = (q15_t) (result_values[0] - DC_OFFSET);	/* Se le resta el offset de continua que trae la señal de entrada */
+	/* Place your code here */
+	adc_finished = true;
+	input_value_fixed = (q15_t) (result_values[0] - DC_OFFSET);	/* Se le resta el offset de continua que trae la señal de entrada */
 
-  /* Add for ARM errata 838869, affects Cortex-M4, Cortex-M4F
-     Store immediate overlapping exception return operation might vector to incorrect interrupt. */
-  #if defined __CORTEX_M && (__CORTEX_M == 4U)
-    __DSB();
-  #endif
+	/* Add for ARM errata 838869, affects Cortex-M4, Cortex-M4F
+	 Store immediate overlapping exception return operation might vector to incorrect interrupt. */
+	#if defined __CORTEX_M && (__CORTEX_M == 4U)
+		__DSB();
+	#endif
 }
 
 /*
